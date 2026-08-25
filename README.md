@@ -41,6 +41,9 @@ the configured Swing server, starts a user-owned `mpv` process, and creates
 mode-0600 temporary runtime files under `$XDG_RUNTIME_DIR`. It does not use
 sudo, install services, or modify system files. The saved config contains only
 the server URL and username; the password remains in the desktop keyring.
+HTTP response bodies are capped at 8 MiB (error bodies at 64 KiB), playback is
+capped at 1,000 tracks, and generated playlist/state/output data has strict
+size limits before it is written or sent to the shell.
 
 ## Remove
 

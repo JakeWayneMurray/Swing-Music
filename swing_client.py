@@ -24,6 +24,12 @@ RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "omarchy-swing-m
 PLAYER_PID_FILE = RUNTIME_DIR / "player.pid"
 PLAYER_SOCKET = RUNTIME_DIR / "player.sock"
 PLAYER_STATE_FILE = RUNTIME_DIR / "player.json"
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_ERROR_BODY_BYTES = 64 * 1024
+MAX_PLAYBACK_TRACKS = 1000
+MAX_PLAYLIST_BYTES = 4 * 1024 * 1024
+MAX_STATE_BYTES = 1 * 1024 * 1024
+MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 
 
 class SwingError(RuntimeError):
@@ -31,7 +37,26 @@ class SwingError(RuntimeError):
 
 
 def emit(payload: dict) -> None:
-    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > MAX_OUTPUT_BYTES:
+        encoded = json.dumps(
+            {"ok": False, "error": "Swing Music response is too large."},
+            separators=(",", ":"),
+        ).encode("utf-8")
+    print(encoded.decode("utf-8"))
+
+
+def read_limited(stream, limit: int) -> bytes:
+    chunks = []
+    total = 0
+    while True:
+        chunk = stream.read(min(64 * 1024, limit - total + 1))
+        if not chunk:
+            return b"".join(chunks)
+        total += len(chunk)
+        if total > limit:
+            raise SwingError("Swing Music response is too large.")
+        chunks.append(chunk)
 
 
 def read_config() -> dict:
@@ -121,11 +146,20 @@ def request_json(url: str, *, token: str = "", body: dict | None = None) -> dict
     request = urllib.request.Request(url, data=data, headers=headers, method="POST" if body is not None else "GET")
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
-            return json.loads(response.read().decode("utf-8"))
+            length = response.headers.get("Content-Length")
+            if length:
+                try:
+                    if int(length) > MAX_RESPONSE_BYTES:
+                        raise SwingError("Swing Music response is too large.")
+                except ValueError:
+                    pass
+            return json.loads(read_limited(response, MAX_RESPONSE_BYTES).decode("utf-8"))
     except urllib.error.HTTPError as exc:
         try:
-            payload = json.loads(exc.read().decode("utf-8"))
+            payload = json.loads(read_limited(exc, MAX_ERROR_BODY_BYTES).decode("utf-8"))
             message = payload.get("msg") or payload.get("error")
+        except SwingError:
+            raise
         except Exception:
             message = None
         if exc.code in {401, 422}:
@@ -352,15 +386,20 @@ def tracks_for_reference(base: str, token: str, reference: dict) -> list[dict]:
     elif kind == "playlist":
         playlist_id = urllib.parse.quote(str(reference.get("id", "")), safe="")
         payload = request_json(
-            f"{base}/playlists/{playlist_id}?no_tracks=false&start=0&limit=100000",
+            f"{base}/playlists/{playlist_id}?no_tracks=false&start=0&limit={MAX_PLAYBACK_TRACKS}",
             token=token,
         )
+        info = payload.get("info", {})
+        if isinstance(info, dict) and int(info.get("count", 0) or 0) > MAX_PLAYBACK_TRACKS:
+            raise SwingError(f"This playlist has more than {MAX_PLAYBACK_TRACKS} tracks and cannot be played here.")
         tracks = payload.get("tracks", [])
     else:
         raise SwingError("Unsupported playback result.")
 
     if not isinstance(tracks, list):
         raise SwingError("Swing Music returned an invalid track list.")
+    if len(tracks) > MAX_PLAYBACK_TRACKS:
+        raise SwingError(f"Playback is limited to {MAX_PLAYBACK_TRACKS} tracks.")
     playable = [
         track for track in tracks
         if isinstance(track, dict) and track.get("trackhash") and track.get("filepath")
@@ -429,24 +468,31 @@ def cmd_play() -> None:
         token = login(base, username, password)
         tracks = tracks_for_reference(base, token, reference)
 
-        stop_player()
-        config_path = write_private_temp(
-            ".conf",
-            "http-header-fields=Authorization: Bearer " + token + "\n",
-        )
         playlist_lines = ["#EXTM3U"]
         for track in tracks:
             title = str(track.get("title") or track.get("og_title") or "Swing Music").replace("\n", " ")
             playlist_lines.extend([f"#EXTINF:-1,{title}", stream_url(base, track)])
-        playlist_path = write_private_temp(".m3u", "\n".join(playlist_lines) + "\n")
-        RUNTIME_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-        PLAYER_STATE_FILE.write_text(json.dumps({
+        playlist_text = "\n".join(playlist_lines) + "\n"
+        if len(playlist_text.encode("utf-8")) > MAX_PLAYLIST_BYTES:
+            raise SwingError("The playback playlist is too large.")
+        state_text = json.dumps({
             "base": base,
             "tracks": [{
                 "title": str(track.get("title") or track.get("og_title") or "Swing Music"),
                 "artwork": artwork_url(base, track),
             } for track in tracks],
-        }, ensure_ascii=False), encoding="utf-8")
+        }, ensure_ascii=False, separators=(",", ":"))
+        if len(state_text.encode("utf-8")) > MAX_STATE_BYTES:
+            raise SwingError("The playback metadata is too large.")
+
+        stop_player()
+        config_path = write_private_temp(
+            ".conf",
+            "http-header-fields=Authorization: Bearer " + token + "\n",
+        )
+        playlist_path = write_private_temp(".m3u", playlist_text)
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        PLAYER_STATE_FILE.write_text(state_text, encoding="utf-8")
         os.chmod(PLAYER_STATE_FILE, 0o600)
 
         process = subprocess.Popen(
