@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jakewaynemurray.swing-music",
+  "name": "Swing Music Search",
+  "version": "1.2.0",
+  "author": "Jake",
+  "license": "MIT",
+  "description": "Search a self-hosted Swing Music library from the Omarchy bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Swing Music Search",
+    "description": "Search tracks, albums, artists, and playlists on Swing Music.",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
