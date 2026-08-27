@@ -19,6 +19,7 @@ Panel {
   property bool playerPaused: false
   property string playerTitle: ""
   property string playerArtwork: ""
+  property real playerVolume: 100
   property int playerIndex: 0
   property int playerCount: 0
   property string serverUrl: ""
@@ -67,6 +68,12 @@ Panel {
   function controlPlayer(action) {
     if (controlProc.running) return
     controlProc.command = [root.helperPath, "control", action]
+    controlProc.running = true
+  }
+
+  function setPlayerVolume(value) {
+    playerVolume = Math.max(0, Math.min(100, Number(value)))
+    controlProc.command = [root.helperPath, "control", "volume", String(Math.round(playerVolume))]
     controlProc.running = true
   }
 
@@ -281,6 +288,7 @@ Panel {
           root.playerPaused = data.paused === true
           root.playerTitle = String(data.title || "")
           root.playerArtwork = String(data.artwork || "")
+          root.playerVolume = Number(data.volume === undefined ? 100 : data.volume)
           root.playerIndex = Number(data.index || 0)
           root.playerCount = Number(data.count || 0)
         } else {
@@ -288,6 +296,7 @@ Panel {
           root.playerPaused = false
           root.playerTitle = ""
           root.playerArtwork = ""
+          root.playerVolume = 100
           root.playerIndex = 0
           root.playerCount = 0
         }
@@ -639,6 +648,42 @@ Panel {
                 root.results = []
                 Qt.callLater(function() { urlField.forceActiveFocus() })
               }
+            }
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.space(8)
+            visible: root.playerActive
+
+            Text {
+              text: "Volume"
+              color: root.bar ? root.bar.foreground : Color.foreground
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              verticalAlignment: Text.AlignVCenter
+            }
+
+            PanelSlider {
+              id: volumeSlider
+              bar: root.bar
+              width: parent.width - Style.space(70)
+              minimum: 0
+              maximum: 100
+              step: 1
+              integer: true
+              value: root.playerVolume
+              onMoved: root.playerVolume = liveValue
+              onReleased: function(v) { root.setPlayerVolume(v) }
+            }
+
+            Text {
+              text: Math.round(volumeSlider.dragging ? volumeSlider.liveValue : root.playerVolume) + "%"
+              color: Qt.darker(root.bar ? root.bar.foreground : Color.foreground, 1.4)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              verticalAlignment: Text.AlignVCenter
             }
           }
         }

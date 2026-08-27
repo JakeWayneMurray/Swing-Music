@@ -557,6 +557,7 @@ def cmd_player_status() -> None:
             {"command": ["get_property", "media-title"], "request_id": "title"},
             {"command": ["get_property", "playlist-pos"], "request_id": "index"},
             {"command": ["get_property", "playlist-count"], "request_id": "count"},
+            {"command": ["get_property", "volume"], "request_id": "volume"},
         ])
         state = {}
         try:
@@ -573,20 +574,27 @@ def cmd_player_status() -> None:
             "title": str(responses.get("title", {}).get("data", "")),
             "index": index,
             "count": int(responses.get("count", {}).get("data", 0) or 0),
+            "volume": max(0, min(100, float(responses.get("volume", {}).get("data", 100) or 0))),
             "artwork": str(current.get("artwork", "")),
         })
     except (SwingError, ValueError, TypeError):
         emit({"ok": True, "active": False})
 
 
-def cmd_player_control(action: str) -> None:
+def cmd_player_control(action: str, value: str | None = None) -> None:
     commands = {
         "pause": ["cycle", "pause"],
         "previous": ["playlist-prev", "weak"],
         "next": ["playlist-next", "weak"],
     }
     try:
-        if action not in commands:
+        if action == "volume":
+            try:
+                volume = max(0, min(100, float(value or "")))
+            except ValueError as exc:
+                raise SwingError("Invalid volume.") from exc
+            commands[action] = ["set_property", "volume", volume]
+        elif action not in commands:
             raise SwingError("Unknown playback control.")
         mpv_commands([{"command": commands[action], "request_id": "control"}])
         emit({"ok": True})
@@ -633,8 +641,8 @@ def main() -> None:
         cmd_play()
     elif command == "player-status":
         cmd_player_status()
-    elif command == "control" and len(sys.argv) == 3:
-        cmd_player_control(sys.argv[2])
+    elif command == "control" and len(sys.argv) in {3, 4}:
+        cmd_player_control(sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
     elif command == "stop":
         stop_player()
         emit({"ok": True})
