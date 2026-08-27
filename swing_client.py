@@ -610,6 +610,20 @@ def cmd_favorite_status(trackhash: str) -> None:
         emit({"ok": False, "error": str(exc)})
 
 
+def cmd_signout() -> None:
+    try:
+        config = read_config()
+        url = str(config.get("url", ""))
+        username = str(config.get("username", ""))
+        if url and username:
+            keyring("clear", "service", APP_ID, "url", url, "username", username)
+        CONFIG_FILE.unlink(missing_ok=True)
+        stop_player()
+        emit({"ok": True})
+    except SwingError as exc:
+        emit({"ok": False, "error": str(exc)})
+
+
 def cmd_player_status() -> None:
     try:
         pid = int(PLAYER_PID_FILE.read_text(encoding="utf-8").strip())
@@ -713,6 +727,8 @@ def main() -> None:
         cmd_favorite(sys.argv[2], sys.argv[3])
     elif command == "favorite-status" and len(sys.argv) == 3:
         cmd_favorite_status(sys.argv[2])
+    elif command == "signout" and len(sys.argv) == 2:
+        cmd_signout()
     elif command == "control" and len(sys.argv) in {3, 4}:
         cmd_player_control(sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
     elif command == "stop":

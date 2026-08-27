@@ -22,6 +22,7 @@ Panel {
   property string playerTrackHash: ""
   property bool playerFavorite: false
   property bool favoriteBusy: false
+  property bool signoutBusy: false
   property real playerVolume: 100
   property int playerIndex: 0
   property int playerCount: 0
@@ -92,6 +93,13 @@ Panel {
     if (trackHash === "" || favoriteStatusProc.running) return
     favoriteStatusProc.command = [root.helperPath, "favorite-status", trackHash]
     favoriteStatusProc.running = true
+  }
+
+  function signOut() {
+    if (signoutBusy) return
+    signoutBusy = true
+    signoutProc.command = [root.helperPath, "signout"]
+    signoutProc.running = true
   }
 
   function parseOutput(text, fallback) {
@@ -409,6 +417,30 @@ Panel {
     command: [root.helperPath, "stop"]
   }
 
+  Process {
+    id: signoutProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var data = root.parseOutput(text, "Sign out failed.")
+        root.signoutBusy = false
+        if (!data.ok) {
+          root.errorMessage = String(data.error || "Sign out failed.")
+          return
+        }
+        root.configured = false
+        root.serverUrl = ""
+        root.savedUsername = ""
+        root.results = []
+        searchField.text = ""
+        root.errorMessage = ""
+        stopProc.running = true
+        root.playerActive = false
+        Qt.callLater(function() { urlField.forceActiveFocus() })
+      }
+    }
+  }
+
   KeyboardPanel {
     id: popup
     anchorItem: root.anchorItem
@@ -447,7 +479,7 @@ Panel {
           }
 
           Column {
-            width: parent.width - Style.space(50)
+            width: parent.width - Style.space(150)
             Text {
               text: "Swing Music"
               color: root.bar ? root.bar.foreground : Color.foreground
@@ -463,6 +495,15 @@ Panel {
               elide: Text.ElideRight
               width: parent.width
             }
+          }
+
+          Button {
+            width: Style.space(90)
+            text: root.signoutBusy ? "Signing out…" : "Sign out"
+            bordered: true
+            enabled: !root.signoutBusy
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.signOut()
           }
         }
 
@@ -699,32 +740,12 @@ Panel {
             width: parent.width
             spacing: Style.space(6)
             Button {
-              text: "Open Swing"
-              bordered: true
-              width: (parent.width - Style.space(12)) / 3
-              onClicked: {
-                root.openUrl(root.serverUrl)
-                root.close()
-              }
-            }
-            Button {
               text: "Stop"
-              width: (parent.width - Style.space(12)) / 3
+              width: parent.width
               onClicked: {
                 stopProc.running = true
                 root.playerActive = false
                 root.refreshPlayerStatus()
-              }
-            }
-            Button {
-              text: "Change connection"
-              width: (parent.width - Style.space(12)) / 3
-              onClicked: {
-                root.configured = false
-                urlField.text = root.serverUrl
-                usernameField.text = root.savedUsername
-                root.results = []
-                Qt.callLater(function() { urlField.forceActiveFocus() })
               }
             }
           }
