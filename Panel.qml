@@ -33,7 +33,8 @@ Panel {
     { key: "track", label: "Songs" },
     { key: "album", label: "Albums" },
     { key: "artist", label: "Artists" },
-    { key: "playlist", label: "Playlists" }
+    { key: "playlist", label: "Playlists" },
+    { key: "favorite", label: "♥" }
   ]
   readonly property string helperPath: Qt.resolvedUrl("swing_client.py").toString().replace("file://", "")
   readonly property var barIdentity: hostWidget || root
@@ -113,6 +114,10 @@ Panel {
       runBrowse()
       return
     }
+    if (selectedCategory === "favorite") {
+      runBrowse()
+      return
+    }
     busy = true
     errorMessage = ""
     searchProc.command = [root.helperPath, "search", query, root.selectedCategory]
@@ -120,7 +125,7 @@ Panel {
   }
 
   function runBrowse() {
-    if (!configured || busy || searchField.text.trim().length >= 2) return
+    if (!configured || busy || (selectedCategory !== "favorite" && searchField.text.trim().length >= 2)) return
     busy = true
     errorMessage = ""
     browseProc.command = [root.helperPath, "browse", root.selectedCategory]
@@ -132,7 +137,11 @@ Panel {
     selectedCategory = category
     selectedIndex = 0
     results = []
-    if (searchField.text.trim().length >= 2) searchDebounce.restart()
+    if (category === "favorite") {
+      searchDebounce.stop()
+      searchField.text = ""
+      runBrowse()
+    } else if (searchField.text.trim().length >= 2) searchDebounce.restart()
     else runBrowse()
   }
 

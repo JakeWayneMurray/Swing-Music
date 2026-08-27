@@ -253,7 +253,12 @@ def search_endpoint(base: str, token: str, kind: str, query: str) -> list[dict]:
 
 def browse_endpoint(base: str, token: str, kind: str) -> list[dict]:
     """Return a useful initial shelf: recently played first, alpha fallback."""
-    if kind == "track":
+    if kind == "favorite":
+        items = request_json(
+            f"{base}/favorites/tracks?start=0&limit=1000",
+            token=token,
+        ).get("tracks", [])
+    elif kind == "track":
         recent = request_json(
             f"{base}/playlists/recentlyplayed?no_tracks=false&start=0&limit=100",
             token=token,
@@ -298,7 +303,8 @@ def browse_endpoint(base: str, token: str, kind: str) -> list[dict]:
             [item for item in all_items if isinstance(item, dict) and str(item.get("id")) not in set(recent_ids)],
             key=lambda item: str(item.get("name") or "").casefold(),
         )
-    return [normalize_result(base, kind, item, "") for item in items[:20] if isinstance(item, dict)]
+    limit = 1000 if kind == "favorite" else 20
+    return [normalize_result(base, "track" if kind == "favorite" else kind, item, "") for item in items[:limit] if isinstance(item, dict)]
 
 
 def cmd_status() -> None:
@@ -362,6 +368,8 @@ def cmd_browse(category: str = "all") -> None:
             results = []
             for kind in kinds:
                 results.extend(browse_endpoint(url, token, kind)[:5])
+        elif category == "favorite":
+            results = browse_endpoint(url, token, category)
         elif category in kinds:
             results = browse_endpoint(url, token, category)
         else:
