@@ -659,7 +659,9 @@ Panel {
               Button {
                 width: Style.space(32)
                 height: Style.space(32)
-                text: root.playerFavorite ? "♥" : "♡"
+                text: root.playerFavorite ? "❤" : "♡"
+                fontSize: root.playerFavorite ? Style.font.subtitle : Style.font.body
+                foreground: root.playerFavorite ? Color.accent : (root.bar ? root.bar.foreground : Color.foreground)
                 bordered: true
                 enabled: !root.favoriteBusy
                 tooltipText: root.playerFavorite ? "Remove from favorites" : "Add to favorites"
