@@ -220,6 +220,7 @@ def normalize_result(base: str, kind: str, item: dict, query: str) -> dict:
             "trackhash": str(item.get("trackhash") or ""),
             "filepath": str(item.get("filepath") or ""),
             "image": str(item.get("image") or ""),
+            "favorite": item.get("is_favorite") is True,
         })
     elif kind == "album":
         reference["albumhash"] = str(item.get("albumhash") or "")
@@ -487,6 +488,8 @@ def cmd_play() -> None:
             "base": base,
             "tracks": [{
                 "title": str(track.get("title") or track.get("og_title") or "Swing Music"),
+                "trackhash": str(track.get("trackhash") or ""),
+                "favorite": track.get("is_favorite") is True,
                 "artwork": artwork_url(base, track),
             } for track in tracks],
         }, ensure_ascii=False, separators=(",", ":"))
@@ -552,6 +555,25 @@ def mpv_commands(commands: list[dict]) -> dict:
         raise SwingError("Playback is not responding.") from exc
 
 
+def cmd_favorite(trackhash: str, action: str) -> None:
+    try:
+        if action not in {"add", "remove"}:
+            raise SwingError("Unknown favorite action.")
+        config = read_config()
+        base = normalize_url(str(config.get("url", "")))
+        username = str(config.get("username", ""))
+        password = lookup_password(base, username)
+        token = login(base, username, password)
+        request_json(
+            f"{base}/favorites/{action}",
+            token=token,
+            body={"hash": trackhash, "type": "track"},
+        )
+        emit({"ok": True, "favorite": action == "add"})
+    except SwingError as exc:
+        emit({"ok": False, "error": str(exc)})
+
+
 def cmd_player_status() -> None:
     try:
         pid = int(PLAYER_PID_FILE.read_text(encoding="utf-8").strip())
@@ -583,6 +605,8 @@ def cmd_player_status() -> None:
             "index": index,
             "count": int(responses.get("count", {}).get("data", 0) or 0),
             "volume": max(0, min(100, float(responses.get("volume", {}).get("data", 100) or 0))),
+            "trackhash": str(current.get("trackhash", "")),
+            "favorite": current.get("favorite") is True,
             "artwork": str(current.get("artwork", "")),
         })
     except (SwingError, ValueError, TypeError):
@@ -649,6 +673,8 @@ def main() -> None:
         cmd_play()
     elif command == "player-status":
         cmd_player_status()
+    elif command == "favorite" and len(sys.argv) == 4:
+        cmd_favorite(sys.argv[2], sys.argv[3])
     elif command == "control" and len(sys.argv) in {3, 4}:
         cmd_player_control(sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
     elif command == "stop":

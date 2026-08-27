@@ -19,6 +19,9 @@ Panel {
   property bool playerPaused: false
   property string playerTitle: ""
   property string playerArtwork: ""
+  property string playerTrackHash: ""
+  property bool playerFavorite: false
+  property bool favoriteBusy: false
   property real playerVolume: 100
   property int playerIndex: 0
   property int playerCount: 0
@@ -76,6 +79,13 @@ Panel {
     playerVolume = Math.max(0, Math.min(100, Number(value)))
     controlProc.command = [root.helperPath, "control", "volume", String(Math.round(playerVolume))]
     controlProc.running = true
+  }
+
+  function togglePlayerFavorite() {
+    if (favoriteBusy || playerTrackHash === "") return
+    favoriteBusy = true
+    favoriteProc.command = [root.helperPath, "favorite", playerTrackHash, playerFavorite ? "remove" : "add"]
+    favoriteProc.running = true
   }
 
   function parseOutput(text, fallback) {
@@ -297,6 +307,8 @@ Panel {
           root.playerPaused = data.paused === true
           root.playerTitle = String(data.title || "")
           root.playerArtwork = String(data.artwork || "")
+          root.playerTrackHash = String(data.trackhash || "")
+          root.playerFavorite = data.favorite === true
           root.playerVolume = Number(data.volume === undefined ? 100 : data.volume)
           root.playerIndex = Number(data.index || 0)
           root.playerCount = Number(data.count || 0)
@@ -305,6 +317,9 @@ Panel {
           root.playerPaused = false
           root.playerTitle = ""
           root.playerArtwork = ""
+          root.playerTrackHash = ""
+          root.playerFavorite = false
+          root.favoriteBusy = false
           root.playerVolume = 100
           root.playerIndex = 0
           root.playerCount = 0
@@ -320,6 +335,24 @@ Panel {
       onStreamFinished: {
         var data = root.parseOutput(text, "Playback control failed.")
         if (!data.ok) root.errorMessage = String(data.error || "Playback control failed.")
+        root.refreshPlayerStatus()
+      }
+    }
+  }
+
+  Process {
+    id: favoriteProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var data = root.parseOutput(text, "Favorite update failed.")
+        root.favoriteBusy = false
+        if (!data.ok) {
+          root.errorMessage = String(data.error || "Favorite update failed.")
+          return
+        }
+        root.playerFavorite = data.favorite === true
+        root.errorMessage = ""
         root.refreshPlayerStatus()
       }
     }
@@ -579,7 +612,7 @@ Panel {
               }
 
               Column {
-                width: parent.width - Style.space(82)
+                width: parent.width - Style.space(130)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.space(3)
                 Text {
@@ -598,6 +631,17 @@ Panel {
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
                 }
+              }
+
+              Button {
+                width: Style.space(32)
+                height: Style.space(32)
+                text: root.playerFavorite ? "♥" : "♡"
+                bordered: true
+                enabled: !root.favoriteBusy
+                tooltipText: root.playerFavorite ? "Remove from favorites" : "Add to favorites"
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: root.togglePlayerFavorite()
               }
             }
 
