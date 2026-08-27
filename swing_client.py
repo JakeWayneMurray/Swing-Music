@@ -305,7 +305,11 @@ def browse_endpoint(base: str, token: str, kind: str) -> list[dict]:
             key=lambda item: str(item.get("name") or "").casefold(),
         )
     limit = 1000 if kind == "favorite" else 20
-    return [normalize_result(base, "track" if kind == "favorite" else kind, item, "") for item in items[:limit] if isinstance(item, dict)]
+    results = [normalize_result(base, "track" if kind == "favorite" else kind, item, "") for item in items[:limit] if isinstance(item, dict)]
+    if kind == "favorite":
+        for result in results:
+            result["ref"]["kind"] = "favorite"
+    return results
 
 
 def cmd_status() -> None:
@@ -392,6 +396,18 @@ def tracks_for_reference(base: str, token: str, reference: dict) -> list[dict]:
     elif kind == "artist":
         artisthash = urllib.parse.quote(str(reference.get("artisthash", "")), safe="")
         tracks = request_json(f"{base}/artist/{artisthash}/tracks", token=token)
+    elif kind == "favorite":
+        tracks = request_json(
+            f"{base}/favorites/tracks?start=0&limit={MAX_PLAYBACK_TRACKS}",
+            token=token,
+        ).get("tracks", [])
+        selected_hash = str(reference.get("trackhash", ""))
+        selected_index = next(
+            (index for index, track in enumerate(tracks) if isinstance(track, dict) and str(track.get("trackhash", "")) == selected_hash),
+            None,
+        )
+        if selected_index is not None:
+            tracks = tracks[selected_index:] + tracks[:selected_index]
     elif kind == "playlist":
         playlist_id = urllib.parse.quote(str(reference.get("id", "")), safe="")
         payload = request_json(
