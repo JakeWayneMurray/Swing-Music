@@ -175,6 +175,18 @@ Panel {
     resultList.positionViewAtIndex(selectedIndex, ListView.Contain)
   }
 
+  function selectCategoryBy(delta) {
+    var currentIndex = 0
+    for (var i = 0; i < searchCategories.length; i++) {
+      if (searchCategories[i].key === selectedCategory) {
+        currentIndex = i
+        break
+      }
+    }
+    var nextIndex = Math.max(0, Math.min(searchCategories.length - 1, currentIndex + delta))
+    chooseCategory(String(searchCategories[nextIndex].key))
+  }
+
   function playResult(index) {
     if (index < 0 || index >= results.length) return
     if (playBusy) return
@@ -455,7 +467,10 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: urlField.activeFocus || usernameField.activeFocus || passwordField.activeFocus
-      onMoveRequested: function(dx, dy) { if (dy !== 0) root.selectBy(dy) }
+      onMoveRequested: function(dx, dy) {
+        if (dy !== 0) root.selectBy(dy)
+        else if (dx !== 0) root.selectCategoryBy(dx)
+      }
       onActivateRequested: {
         if (root.results.length > 0) root.playResult(root.selectedIndex)
         else root.runSearch()
