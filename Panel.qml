@@ -454,9 +454,12 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: urlField.activeFocus || usernameField.activeFocus || passwordField.activeFocus || searchField.activeFocus
+      blocked: urlField.activeFocus || usernameField.activeFocus || passwordField.activeFocus
       onMoveRequested: function(dx, dy) { if (dy !== 0) root.selectBy(dy) }
-      onActivateRequested: root.playResult(root.selectedIndex)
+      onActivateRequested: {
+        if (root.results.length > 0) root.playResult(root.selectedIndex)
+        else root.runSearch()
+      }
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
@@ -525,12 +528,14 @@ Panel {
             width: parent.width
             placeholderText: "Server URL (for example http://localhost:1970)"
             onAccepted: usernameField.forceActiveFocus()
+            Keys.onEscapePressed: root.close()
           }
           TextField {
             id: usernameField
             width: parent.width
             placeholderText: "Username"
             onAccepted: passwordField.forceActiveFocus()
+            Keys.onEscapePressed: root.close()
           }
           TextField {
             id: passwordField
@@ -538,6 +543,7 @@ Panel {
             password: true
             placeholderText: "Password"
             onAccepted: root.submitSetup()
+            Keys.onEscapePressed: root.close()
           }
           Button {
             width: parent.width
