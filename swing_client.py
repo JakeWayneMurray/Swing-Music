@@ -489,7 +489,7 @@ def cmd_play() -> None:
             "tracks": [{
                 "title": str(track.get("title") or track.get("og_title") or "Swing Music"),
                 "trackhash": str(track.get("trackhash") or ""),
-                "favorite": track.get("is_favorite") is True,
+                "favorite": track.get("is_favorite") is True or track.get("favorite") is True,
                 "artwork": artwork_url(base, track),
             } for track in tracks],
         }, ensure_ascii=False, separators=(",", ":"))
