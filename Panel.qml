@@ -88,6 +88,12 @@ Panel {
     favoriteProc.running = true
   }
 
+  function checkPlayerFavorite(trackHash) {
+    if (trackHash === "" || favoriteStatusProc.running) return
+    favoriteStatusProc.command = [root.helperPath, "favorite-status", trackHash]
+    favoriteStatusProc.running = true
+  }
+
   function parseOutput(text, fallback) {
     try { return JSON.parse(text.trim()) }
     catch (e) { return { ok: false, error: fallback } }
@@ -307,8 +313,12 @@ Panel {
           root.playerPaused = data.paused === true
           root.playerTitle = String(data.title || "")
           root.playerArtwork = String(data.artwork || "")
-          root.playerTrackHash = String(data.trackhash || "")
-          root.playerFavorite = data.favorite === true
+          var nextTrackHash = String(data.trackhash || "")
+          if (nextTrackHash !== root.playerTrackHash) {
+            root.playerTrackHash = nextTrackHash
+            root.playerFavorite = data.favorite === true
+            root.checkPlayerFavorite(nextTrackHash)
+          }
           root.playerVolume = Number(data.volume === undefined ? 100 : data.volume)
           root.playerIndex = Number(data.index || 0)
           root.playerCount = Number(data.count || 0)
@@ -353,7 +363,20 @@ Panel {
         }
         root.playerFavorite = data.favorite === true
         root.errorMessage = ""
+        if (root.selectedCategory === "favorite") root.runBrowse()
         root.refreshPlayerStatus()
+      }
+    }
+  }
+
+  Process {
+    id: favoriteStatusProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var data = root.parseOutput(text, "")
+        if (data.ok && data.trackhash === root.playerTrackHash)
+          root.playerFavorite = data.favorite === true
       }
     }
   }

@@ -574,6 +574,26 @@ def cmd_favorite(trackhash: str, action: str) -> None:
         emit({"ok": False, "error": str(exc)})
 
 
+def cmd_favorite_status(trackhash: str) -> None:
+    try:
+        config = read_config()
+        base = normalize_url(str(config.get("url", "")))
+        username = str(config.get("username", ""))
+        password = lookup_password(base, username)
+        token = login(base, username, password)
+        data = request_json(
+            f"{base}/favorites/check?hash={urllib.parse.quote(trackhash, safe='')}&type=track",
+            token=token,
+        )
+        emit({
+            "ok": True,
+            "trackhash": trackhash,
+            "favorite": data.get("is_favorite") is True,
+        })
+    except SwingError as exc:
+        emit({"ok": False, "error": str(exc)})
+
+
 def cmd_player_status() -> None:
     try:
         pid = int(PLAYER_PID_FILE.read_text(encoding="utf-8").strip())
@@ -675,6 +695,8 @@ def main() -> None:
         cmd_player_status()
     elif command == "favorite" and len(sys.argv) == 4:
         cmd_favorite(sys.argv[2], sys.argv[3])
+    elif command == "favorite-status" and len(sys.argv) == 3:
+        cmd_favorite_status(sys.argv[2])
     elif command == "control" and len(sys.argv) in {3, 4}:
         cmd_player_control(sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
     elif command == "stop":
